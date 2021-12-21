@@ -90,7 +90,6 @@ bool DCCPacketQueue::forget(uint16_t address, uint8_t address_kind)
       queue[i] = DCCPacket(); //revert to default value
     }
   }
-  --written;
   return found;
 }
 

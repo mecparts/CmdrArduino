@@ -382,13 +382,14 @@ bool DCCPacketScheduler::eStop(uint16_t address, uint8_t address_kind)
     high_priority_queue.forget(address, address_kind);
     low_priority_queue.forget(address, address_kind);
     repeat_queue.forget(address, address_kind);
+    return true;
 }
 
 bool DCCPacketScheduler::setBasicAccessory(uint16_t address, uint8_t function)
 {
     DCCPacket p(address);
 
-	  uint8_t data[] = { 0x01 | ((function & 0x03) << 1) };
+	  uint8_t data[] = { (uint8_t)(0x01 | ((function & 0x03) << 1)) };
 	  p.addData(data, 1);
 	  p.setKind(basic_accessory_packet_kind);
 	  p.setRepeat(OTHER_REPEAT);
@@ -400,7 +401,7 @@ bool DCCPacketScheduler::unsetBasicAccessory(uint16_t address, uint8_t function)
 {
 		DCCPacket p(address);
 
-		uint8_t data[] = { ((function & 0x03) << 1) };
+		uint8_t data[] = { (uint8_t)((function & 0x03) << 1) };
 		p.addData(data, 1);
 		p.setKind(basic_accessory_packet_kind);
 		p.setRepeat(OTHER_REPEAT);
