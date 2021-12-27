@@ -56,6 +56,20 @@ class DCCPacketQueue
     void clear(void);
 };
 
+//A queue that, instead of writing new packets to the end of the queue, simply overwrites the oldest packet in the queue
+class DCCTemporalQueue: public DCCPacketQueue
+{
+  public: //protected:
+    byte *age;
+  public:
+    DCCTemporalQueue(void) : DCCPacketQueue() {};
+    void setup(byte length);
+    inline bool isFull(void) { return false; }
+    bool insertPacket(DCCPacket *packet);
+    bool readPacket(DCCPacket *packet);
+    bool forget(uint16_t address, uint8_t address_kind);
+};
+
 //A queue that, when a packet is read, puts that packet back in the queue if it requires repeating.
 class DCCRepeatQueue: public DCCPacketQueue
 {

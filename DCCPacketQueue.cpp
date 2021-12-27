@@ -21,7 +21,7 @@ bool DCCPacketQueue::insertPacket(DCCPacket *packet)
 //  Serial.println(packet->getKind(), DEC);
    //First: Overwrite any packet with the same address and kind; if no such packet THEN hitup the packet at write_pos
   byte i = read_pos;
-  while(i != (read_pos+written)%(size) )//(size+1) ) //size+1 so we can check the last slot, too…
+  while(i != (read_pos+written)%(size) )
   {
     if( (queue[i].getAddress() == packet->getAddress()) && (queue[i].getKind() == packet->getKind()))
     {
@@ -104,6 +104,110 @@ void DCCPacketQueue::clear(void)
   }
 }
 
+
+/*****************************/
+
+void DCCTemporalQueue::setup(byte length)
+{
+  DCCPacketQueue::setup(length);
+
+  age = (byte *)malloc(sizeof(byte)*size);
+  for(int i = 0; i<length; ++i)
+  {
+    age[i] = 255;
+  }
+}
+
+bool DCCTemporalQueue::insertPacket(DCCPacket *packet)
+{
+  //first, see if there is a packet to overwrite
+  //otherwise find the oldest packet, and write over it.
+  byte eldest = 0;
+  byte eldest_idx = 0;
+  bool updating = false;
+  for(byte i = 0; i < size; ++i)
+  {
+    if( (queue[i].getAddress() == packet->getAddress()) && (queue[i].getKind() == packet->getKind()) )
+    {
+      eldest_idx = i;
+      updating = true;
+      break; //short circuit this, we've found it;
+    }
+    else if(age[i] > eldest)
+    {
+      eldest = age[i];
+      eldest_idx = i;
+    }
+  }
+  memcpy(&queue[eldest_idx],packet,sizeof(DCCPacket));
+  age[eldest_idx] = 0;
+  //now, age the remaining packets in the queue.
+  for(int i = 0; i < size; ++i)
+  {
+    if(i != eldest_idx)
+    {
+      if(age[i] < 255) //ceiling effect for age.
+      {
+        ++age[i];
+      }
+    }
+  }
+  if(!updating)
+    ++written;
+  return true;
+}
+
+bool DCCTemporalQueue::readPacket(DCCPacket *packet)
+{
+  if(!isEmpty())
+  {
+    //valid packets will be found in index range [0,written);
+    memcpy(packet,&queue[read_pos],sizeof(DCCPacket));
+    read_pos = (read_pos + 1) % written;
+    return true;
+  }
+  return false;
+}
+
+bool DCCTemporalQueue::forget(uint16_t address, uint8_t address_kind)
+{
+  bool found = false;
+  int i = 0;
+  while(i < written)
+  {
+    if( (queue[i].getAddress() == address) && (queue[i].getAddressKind() == address_kind) )
+    {
+      found = true;
+      // It's not enough to just make the queue packet an idle packet
+      // it has to be physically removed. Otherwise, the next time a
+      // packet is added to the temporal queue, the newly idled packet
+      // will be skipped over (the address and kind won't match the
+      // new packet) and we'll add a new packet to the end of the queue.
+      for(int j = i + 1; j < written; ++j)
+      {
+        queue[j - 1] = queue[j];
+        age[j - 1] = age[j];
+      }
+      --written;
+      // keep read_pos within written part of queue
+      if( written )
+      {
+        read_pos %= written;
+      }
+      else
+      {
+        read_pos = 0;
+      }
+      queue[written] = DCCPacket(); //revert to default value
+      age[written] = 255; //mark it as really old.
+    }
+    else 
+    {
+      ++i;
+    }
+  }
+  return found;
+}
 
 /*****************************/
 

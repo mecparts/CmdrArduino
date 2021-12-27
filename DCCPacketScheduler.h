@@ -8,13 +8,12 @@
 #define HIGH_PRIORITY_QUEUE_SIZE    10
 #define LOW_PRIORITY_QUEUE_SIZE     10
 #define REPEAT_QUEUE_SIZE           10
-//#define PERIODIC_REFRESH_QUEUE_SIZE 10
+#define PERIODIC_REFRESH_QUEUE_SIZE 10
 
 #define LOW_PRIORITY_INTERVAL     5
 #define REPEAT_INTERVAL           11
 #define PERIODIC_REFRESH_INTERVAL 23
 
-#define SPEED_REPEAT      3
 #define FUNCTION_REPEAT   3
 #define E_STOP_REPEAT     5
 #define OPS_MODE_PROGRAMMING_REPEAT 3
@@ -70,7 +69,7 @@ class DCCPacketScheduler
     DCCPacketQueue high_priority_queue;
     DCCPacketQueue low_priority_queue;
     DCCRepeatQueue repeat_queue;
-    //DCCTemporalQueue periodic_refresh_queue;
+    DCCTemporalQueue periodic_refresh_queue;
     
     //TODO to be completed later.
     //DCC_Packet ops_programming_queue[10];

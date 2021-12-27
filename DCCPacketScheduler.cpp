@@ -37,10 +37,6 @@ extern volatile uint8_t current_packet_size;
 extern volatile uint8_t current_uint8_t_counter;
 /// How many bits remain in the current data uint8_t/preamble before changing states?
 extern volatile uint8_t current_bit_counter; //init to 14 1's for the preamble
-/// A fixed-content packet to send when idle
-//uint8_t DCC_Idle_Packet[3] = {255,0,255};
-/// A fixed-content packet to send to reset all decoders on layout
-//uint8_t DCC_Reset_Packet[3] = {0,0,0};
 
 ///////////////////////////////////////////////
 ///////////////////////////////////////////////
@@ -52,7 +48,7 @@ DCCPacketScheduler::DCCPacketScheduler(void) : default_speed_steps(128), last_pa
   high_priority_queue.setup(HIGH_PRIORITY_QUEUE_SIZE);
   low_priority_queue.setup(LOW_PRIORITY_QUEUE_SIZE);
   repeat_queue.setup(REPEAT_QUEUE_SIZE);
-  //periodic_refresh_queue.setup(PERIODIC_REFRESH_QUEUE_SIZE);
+  periodic_refresh_queue.setup(PERIODIC_REFRESH_QUEUE_SIZE);
 }
     
 //for configuration
@@ -101,8 +97,8 @@ void DCCPacketScheduler::repeatPacket(DCCPacket *p)
     case e_stop_packet_kind: //e_stop packets automatically repeat without having to be put in a special queue
       break;
     case speed_packet_kind: //speed packets go to the periodic_refresh queue
-    //  periodic_refresh_queue.insertPacket(p);
-    //  break;
+      periodic_refresh_queue.insertPacket(p);
+      break;
     case function_packet_1_kind: //all other packets go to the repeat_queue
     case function_packet_2_kind: //all other packets go to the repeat_queue
     case function_packet_3_kind: //all other packets go to the repeat_queue
@@ -151,7 +147,7 @@ bool DCCPacketScheduler::setSpeed14(uint16_t address, uint8_t address_kind, int8
   if(new_speed<0)
   {
     dir = 0;
-    abs_speed = new_speed * -1;
+    abs_speed = -abs_speed;
   }
   if(!new_speed) //estop!
     return eStop(address, address_kind);//speed_data_uint8_ts[0] |= 0x01; //estop
@@ -164,13 +160,10 @@ bool DCCPacketScheduler::setSpeed14(uint16_t address, uint8_t address_kind, int8
   //Serial.println(speed_data_uint8_ts[0],BIN);
   p.addData(speed_data_uint8_ts,1);
 
-  p.setRepeat(SPEED_REPEAT);
-  
   p.setKind(speed_packet_kind);  
 
   //speed packets get refreshed indefinitely, and so the repeat doesn't need to be set.
-  //speed packets go to the high proirity queue
-  return(high_priority_queue.insertPacket(&p));
+  return(periodic_refresh_queue.insertPacket(&p));
 }
 
 bool DCCPacketScheduler::setSpeed28(uint16_t address, uint8_t address_kind, int8_t new_speed)
@@ -182,7 +175,7 @@ bool DCCPacketScheduler::setSpeed28(uint16_t address, uint8_t address_kind, int8
   if(new_speed<0)
   {
     dir = 0;
-    abs_speed = new_speed * -1;
+    abs_speed = -abs_speed;
   }
 //  Serial.println(speed);
 //  Serial.println(dir);
@@ -201,14 +194,10 @@ bool DCCPacketScheduler::setSpeed28(uint16_t address, uint8_t address_kind, int8
 //  Serial.println("=======");
   p.addData(speed_data_uint8_ts,1);
   
-  p.setRepeat(SPEED_REPEAT);
-  
   p.setKind(speed_packet_kind);
     
   //speed packets get refreshed indefinitely, and so the repeat doesn't need to be set.
-  //speed packets go to the high proirity queue
-  //return(high_priority_queue.insertPacket(&p));
-  return(high_priority_queue.insertPacket(&p));
+  return(periodic_refresh_queue.insertPacket(&p));
 }
 
 bool DCCPacketScheduler::setSpeed128(uint16_t address, uint8_t address_kind, int8_t new_speed)
@@ -223,7 +212,7 @@ bool DCCPacketScheduler::setSpeed128(uint16_t address, uint8_t address_kind, int
   if(new_speed<0)
   {
     dir = 0;
-    abs_speed = new_speed * -1;
+    abs_speed = -abs_speed;
   }
   if(!new_speed) //estop!
     return eStop(address, address_kind);//speed_data_uint8_ts[0] |= 0x01; //estop
@@ -238,13 +227,10 @@ bool DCCPacketScheduler::setSpeed128(uint16_t address, uint8_t address_kind, int
   //Serial.print(" ");
   //Serial.println(speed_data_uint8_ts[1],BIN);
   
-  p.setRepeat(SPEED_REPEAT);
-  
   p.setKind(speed_packet_kind);
   
   //speed packets get refreshed indefinitely, and so the repeat doesn't need to be set.
-  //speed packets go to the high proirity queue
-  return(high_priority_queue.insertPacket(&p));
+  return(periodic_refresh_queue.insertPacket(&p));
 }
 
 bool DCCPacketScheduler::setFunctions(uint16_t address, uint8_t address_kind, uint16_t functions)
@@ -358,12 +344,13 @@ bool DCCPacketScheduler::eStop(void)
     uint8_t data[] = {0x71}; //01110001
     e_stop_packet.addData(data,1);
     e_stop_packet.setKind(e_stop_packet_kind);
-    e_stop_packet.setRepeat(10);
+    e_stop_packet.setRepeat(E_STOP_REPEAT);
     e_stop_queue.insertPacket(&e_stop_packet);
     //now, clear all other queues
     high_priority_queue.clear();
     low_priority_queue.clear();
     repeat_queue.clear();
+    periodic_refresh_queue.clear();
     return true;
 }
     
@@ -376,12 +363,13 @@ bool DCCPacketScheduler::eStop(uint16_t address, uint8_t address_kind)
     uint8_t data[] = {0x41}; //01000001
     e_stop_packet.addData(data,1);
     e_stop_packet.setKind(e_stop_packet_kind);
-    e_stop_packet.setRepeat(10);
+    e_stop_packet.setRepeat(E_STOP_REPEAT);
     e_stop_queue.insertPacket(&e_stop_packet);
     //now, clear this packet's address from all other queues
     high_priority_queue.forget(address, address_kind);
     low_priority_queue.forget(address, address_kind);
     repeat_queue.forget(address, address_kind);
+    periodic_refresh_queue.forget(address, address_kind);
     return true;
 }
 
@@ -418,10 +406,8 @@ void DCCPacketScheduler::update(void) //checks queues, puts whatever's pending o
   if(!current_uint8_t_counter) //if the ISR needs a packet:
   {
     DCCPacket p;
-    //Take from e_stop queue first, then high priority queue.
-    //every fifth packet will come from low priority queue.
-    //every 20th packet will come from periodic refresh queue. (Why 20? because. TODO reasoning)
-    //if there's a packet ready, and the counter is not divisible by 5
+    //Take from e_stop queue first, then high priority queue.,
+    //then low priority queue, the periodic refresh queue.
     //first, we need to know which queues have packets ready, and the state of the this->packet_counter.
     if( !e_stop_queue.isEmpty() ) //if there's an e_stop packet, send it now!
     {
@@ -432,40 +418,33 @@ void DCCPacketScheduler::update(void) //checks queues, puts whatever's pending o
     {
       bool doHigh = high_priority_queue.notEmpty() && high_priority_queue.notRepeat(last_packet_address);
       bool doLow = low_priority_queue.notEmpty() && low_priority_queue.notRepeat(last_packet_address) &&
-                  !((packet_counter % LOW_PRIORITY_INTERVAL) && doHigh);
+                  !((packet_counter % LOW_PRIORITY_INTERVAL) || doHigh);
       bool doRepeat = repeat_queue.notEmpty() && repeat_queue.notRepeat(last_packet_address) &&
-                  !((packet_counter % REPEAT_INTERVAL) && (doHigh || doLow));
-      //bool doRefresh = periodic_refresh_queue.notEmpty() && periodic_refresh_queue.notRepeat(last_packet_address) &&
-      //            !((packet_counter % PERIODIC_REFRESH_INTERVAL) && (doHigh || doLow || doRepeat));
+                  !((packet_counter % REPEAT_INTERVAL) || doHigh || doLow);
+      bool doRefresh = periodic_refresh_queue.notEmpty() && periodic_refresh_queue.notRepeat(last_packet_address) &&
+                  !((packet_counter % PERIODIC_REFRESH_INTERVAL) || doHigh || doLow || doRepeat);
       //examine queues in order from lowest priority to highest.
-      //if(doRefresh)
-      //{
-      //  periodic_refresh_queue.readPacket(&p);
-      //  ++packet_counter;
-      //}
-      //else if(doRepeat)
-      if(doRepeat)
+      if(doRefresh)
+      {
+        periodic_refresh_queue.readPacket(&p);
+      }
+      else if(doRepeat)
       {
         //Serial.println("repeat");
         repeat_queue.readPacket(&p);
-        ++packet_counter;
       }
       else if(doLow)
       {
         //Serial.println("low");
         low_priority_queue.readPacket(&p);
-        ++packet_counter;
       }
       else if(doHigh)
       {
         //Serial.println("high");
         high_priority_queue.readPacket(&p);
-        ++packet_counter;
       }
       //if none of these conditions hold, DCCPackets initialize to the idle packet, so that's what'll get sent.
-      //++packet_counter; //it's a uint8_t; let it overflow, that's OK.
-      //enqueue the packet for repitition, if necessary:
-      //Serial.println("idle");
+      ++packet_counter; //it's a uint8_t; let it overflow, that's OK.
       repeatPacket(&p);
     }
     last_packet_address = p.getAddress(); //remember the address to compare with the next packet
