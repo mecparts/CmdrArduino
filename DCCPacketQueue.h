@@ -67,6 +67,7 @@ class DCCTemporalQueue: public DCCPacketQueue
     inline bool isFull(void) { return false; }
     bool insertPacket(DCCPacket *packet);
     bool readPacket(DCCPacket *packet);
+    void clear(void);
     bool forget(uint16_t address, uint8_t address_kind);
 };
 

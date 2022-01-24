@@ -169,6 +169,18 @@ bool DCCTemporalQueue::readPacket(DCCPacket *packet)
   return false;
 }
 
+void DCCTemporalQueue::clear(void)
+{
+  read_pos = 0;
+  write_pos = 0;
+  written = 0;
+  for(int i = 0; i<size; ++i)
+  {
+    queue[i] = DCCPacket();
+    age[i] = 255;
+  }
+}
+
 bool DCCTemporalQueue::forget(uint16_t address, uint8_t address_kind)
 {
   bool found = false;
